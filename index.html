@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f7f8fa" />
-    <meta name="description" content="Classify a network flow as DDoS or BENIGN using eight CICIDS2017 flow features." />
+    <meta name="description" content="Compare Logistic Regression and Random Forest predictions for a CICIDS2017 network flow using all 69 study features." />
     <title>FlowGuard · DDoS flow classifier</title>
     <link rel="stylesheet" href="./styles.css" />
     <script defer src="./app.js"></script>
@@ -21,83 +21,50 @@
 
       <main>
         <section class="intro" aria-labelledby="page-title">
-            <div class="eyebrow"><span class="eyebrow-dot"></span> NETWORK FLOW CLASSIFICATION</div>
           <h1 id="page-title">See what a flow <em>looks like.</em></h1>
-          <p>Enter eight packet and timing measurements to check whether they resemble the DDoS or BENIGN traffic in the CICIDS2017 Friday capture.</p>
+          <p>Compare Random Forest and Logistic Regression on one network flow using the same 69 features and saved models as the study. Enter the measurements or import a CSV record.</p>
         </section>
 
         <div class="workspace">
           <section class="form-card" aria-labelledby="form-title">
             <div class="card-heading">
               <div>
-                <p class="section-number">01 / INPUT</p>
                 <h2 id="form-title">Flow details</h2>
-                <p class="section-description">Fill in one network flow, or load an example to explore the form.</p>
+                <p class="section-description">All fields follow the CICIDS2017 column names. Destination Port and identifiers are excluded from this trained model.</p>
               </div>
-              <span class="field-count">8 features</span>
+              <span class="field-count" id="feature-count">69 features</span>
             </div>
 
-            <div class="sample-row" aria-label="Example flow values">
-              <span>Try an example</span>
-              <button type="button" class="sample-button" data-example="BENIGN">BENIGN flow <span aria-hidden="true">↗</span></button>
-              <button type="button" class="sample-button" data-example="DDoS">DDoS flow <span aria-hidden="true">↗</span></button>
+            <fieldset class="input-mode-choices">
+              <legend>How will you enter the flow?</legend>
+              <label for="input-mode-upload"><input id="input-mode-upload" type="radio" name="input-mode" value="upload" checked /> Upload CSV</label>
+              <label for="input-mode-manual"><input id="input-mode-manual" type="radio" name="input-mode" value="manual" /> Type 69 values manually</label>
+            </fieldset>
+
+            <div id="upload-panel">
+              <div class="import-panel">
+                <div>
+                  <h3>Upload a network-flow CSV</h3>
+                  <p>Select a CICFlowMeter CSV with a header row. The first data record is used; extra columns are ignored.</p>
+                </div>
+                <label class="upload-button" for="csv-file">Choose CSV</label>
+                <input id="csv-file" type="file" accept=".csv,text/csv" />
+              </div>
+              <p id="import-status" class="import-status" role="status"></p>
             </div>
 
-            <form id="flow-form">
-              <fieldset>
-                <legend>Packet information</legend>
-                <div class="field-grid">
-                  <div class="field">
-                    <label for="packet-max">Fwd Packet Length Max</label>
-                    <input id="packet-max" name="Fwd Packet Length Max" type="number" min="0" step="1" placeholder="e.g. 20" required />
-                    <p>Largest forward packet size</p>
-                  </div>
-                  <div class="field">
-                    <label for="packet-mean">Fwd Packet Length Mean</label>
-                    <input id="packet-mean" name="Fwd Packet Length Mean" type="number" min="0" step="any" placeholder="e.g. 7.14" required />
-                    <p>Average forward packet size</p>
-                  </div>
-                  <div class="field">
-                    <label for="active-packets">act_data_pkt_fwd</label>
-                    <input id="active-packets" name="act_data_pkt_fwd" type="number" min="0" step="1" placeholder="e.g. 5" required />
-                    <p>Forward packets carrying data</p>
-                  </div>
-                  <div class="field">
-                    <label for="total-length">Total Length of Fwd Packets</label>
-                    <input id="total-length" name="Total Length of Fwd Packets" type="number" min="0" step="1" placeholder="e.g. 50" required />
-                    <p>Total forward packet length</p>
-                  </div>
-                  <div class="field">
-                    <label for="backward-packets">Total Backward Packets</label>
-                    <input id="backward-packets" name="Total Backward Packets" type="number" min="0" step="1" placeholder="e.g. 5" required />
-                    <p>Packets sent back in the reverse direction</p>
-                  </div>
+            <form id="flow-form" novalidate>
+              <div id="manual-panel" hidden>
+                <div class="form-tools">
+                  <label for="feature-search">Find a feature</label>
+                  <input id="feature-search" type="search" placeholder="Search the 69 fields" autocomplete="off" />
+                  <span id="filled-count">0 / 69 filled</span>
                 </div>
-              </fieldset>
-
-              <fieldset>
-                <legend>Flow timing</legend>
-                <div class="field-grid">
-                  <div class="field">
-                    <label for="iat-std">Fwd IAT Std</label>
-                    <input id="iat-std" name="Fwd IAT Std" type="number" min="0" step="any" placeholder="e.g. 2447736.518" required />
-                    <p>Variation in forward packet arrival times, in microseconds</p>
-                  </div>
-                  <div class="field">
-                    <label for="iat-max">Fwd IAT Max</label>
-                    <input id="iat-max" name="Fwd IAT Max" type="number" min="0" step="1" placeholder="e.g. 6075462" required />
-                    <p>Longest forward packet arrival gap, in microseconds</p>
-                  </div>
-                  <div class="field">
-                    <label for="flow-duration">Flow Duration</label>
-                    <input id="flow-duration" name="Flow Duration" type="number" min="0" step="1" placeholder="e.g. 8098507" required />
-                    <p>Elapsed time of the full flow, in microseconds</p>
-                  </div>
-                </div>
-              </fieldset>
+                <div id="feature-sections" class="feature-sections"></div>
+              </div>
 
               <div class="form-footer">
-                <p id="model-status" role="status">Loading classifier…</p>
+                <p id="model-status" role="status">Loading classifiers…</p>
                 <button id="predict-button" class="predict-button" type="submit" disabled>Predict flow <span aria-hidden="true">→</span></button>
               </div>
             </form>
@@ -105,35 +72,52 @@
 
           <aside class="side-column" aria-label="Prediction and model information">
             <section class="result-card" id="result-card" aria-live="polite">
-              <div class="result-topline"><span class="result-orbit" aria-hidden="true"></span><span>02 / PREDICTION</span></div>
+              <div class="result-topline"><span class="result-orbit" aria-hidden="true"></span><span>PREDICTION</span></div>
               <div id="result-empty" class="result-empty">
                 <div class="result-symbol" aria-hidden="true"><span></span><span></span><span></span></div>
                 <h2>Ready when you are.</h2>
-                <p>Enter the flow measurements and select <strong>Predict flow</strong> to see the classifier’s result.</p>
+                <p>Enter all 69 measurements or import a CSV record, then select <strong>Predict flow</strong>.</p>
               </div>
               <div id="result-filled" class="result-filled" hidden>
-                <p class="result-overline">THIS FLOW IS CLASSIFIED AS</p>
+                <p class="result-overline">RANDOM FOREST PREDICTION</p>
                 <h2 id="result-label"></h2>
                 <p id="result-description"></p>
+                <div class="result-divider"></div>
+                <div class="baseline-result"><span>LOGISTIC REGRESSION BASELINE</span><strong id="logistic-label"></strong></div>
+                <p id="comparison-note" class="comparison-note"></p>
                 <div class="result-divider"></div>
                 <p class="result-note">This is a model prediction for one flow, not proof that traffic is safe or an attack.</p>
               </div>
             </section>
 
             <section class="info-card">
-              <p class="section-number">ABOUT THIS MODEL</p>
-              <h2>Built for this study’s data.</h2>
-              <p>A 100-tree random forest was retrained on eight flow-behavior features from the Friday CICIDS2017 DDoS capture. Destination port is not used.</p>
-              <div class="metric-row"><strong>99.95%</strong><span>accuracy on held-out two-minute time blocks from this capture</span></div>
-              <p class="info-footnote">This score does not establish performance on other networks, days, or attack types.</p>
+              <h2>Two views of one flow.</h2>
+              <p>Both classifiers use the 69-feature study data. Random Forest has 100 trees; Logistic Regression is the linear baseline. The scores below come from the same saved models that make this page’s predictions.</p>
+                <div class="model-stat"><strong>Random Forest</strong><span id="rf-accuracy">Loading…</span><small id="rf-errors"></small></div>
+                <div class="model-stat"><strong>Logistic Regression</strong><span id="lr-accuracy">Loading…</span><small id="lr-errors"></small></div>
+                <p class="info-footnote">Scores are from <span id="test-count">held-out</span> flows in the same Friday capture, grouped by two-minute time blocks. They do not establish performance on other networks or attacks.</p>
             </section>
           </aside>
         </div>
+
+        <section class="study-section" aria-labelledby="study-title">
+          <h2 id="study-title">Background and objective</h2>
+          <div class="study-grid">
+            <div>
+              <h3>Why study DDoS flows?</h3>
+              <p>DDoS traffic can disrupt access to a network service. Traditional intrusion detection can use known signatures; this study examines whether learned flow patterns can help classify records as BENIGN or DDoS. Machine-learning results still depend on the data and evaluation setting. <a href="https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-94.pdf">NIST intrusion detection guide</a> · <a href="https://gangw.cs.illinois.edu/class/cs562/papers/Closed_World-IDS-sp10.pdf">Sommer and Paxson</a></p>
+            </div>
+            <div>
+              <h3>General objective</h3>
+              <p>Develop and evaluate a network-flow analyzer that classifies records as BENIGN or DDoS using Logistic Regression and Random Forest. The notebook and this site use the same 69 numerical features from the <a href="https://www.unb.ca/cic/datasets/ids-2017.html">CICIDS2017 Friday DDoS capture</a>. The site does not monitor or block live traffic.</p>
+            </div>
+          </div>
+        </section>
       </main>
 
       <footer class="site-footer">
         <span>FlowGuard · CICIDS2017 study prototype</span>
-        <span>Predictions run in your browser. Entered values are not sent to a server.</span>
+        <span>Predictions are processed by this site's Python server using model.pkl.</span>
       </footer>
     </div>
   </body>
