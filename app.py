@@ -16,40 +16,29 @@ MODEL_NAMES = {
     "random_forest": "Random Forest",
     "logistic_regression": "Logistic Regression",
 }
+CSV_MODE = "Upload CSV"
+MANUAL_MODE = "Enter values manually"
 
 CSS = """
 <style>
-  .stApp { background: #fffaf7; color: #262238; }
-  .block-container { max-width: 1180px; padding-top: 2rem; }
+  .block-container { max-width: 1180px; padding-top: 1.7rem; }
   .hero {
-    position: relative; overflow: hidden; padding: 2.1rem 2.4rem;
-    border-radius: 22px; background: #eee7fb; color: #2f2549;
-    margin-bottom: 1.5rem;
+    padding: 1.8rem 2rem; border-radius: 14px;
+    background: #172235; color: #ffffff; margin-bottom: 1.5rem;
   }
-  .hero::after {
-    content: "✿"; position: absolute; right: 1.8rem; top: -.8rem;
-    font-size: 9rem; line-height: 1; color: #d8c8f1; transform: rotate(14deg);
-  }
-  .hero h1 { position: relative; z-index: 1; margin: 0; font-size: clamp(2.2rem, 5vw, 3.6rem); letter-spacing: -.03em; }
-  .hero p { position: relative; z-index: 1; margin: .55rem 0 0; max-width: 55ch; font-size: 1.05rem; }
-  .hero-meta { position: relative; z-index: 1; margin-top: 1.25rem; font-weight: 700; color: #554477; }
-  div.stButton > button[kind="primary"], div.stFormSubmitButton > button[kind="primary"] {
-    background: #714fb4; border-color: #714fb4; color: white;
-  }
-  div.stButton > button[kind="primary"]:hover, div.stFormSubmitButton > button[kind="primary"]:hover {
-    background: #5a3b98; border-color: #5a3b98;
-  }
-  div.stButton > button:focus-visible, input:focus-visible { outline: 3px solid #ac81e8; outline-offset: 2px; }
+  .hero h1 { color: #ffffff; margin: 0; font-size: clamp(2.1rem, 4vw, 3rem); letter-spacing: -.025em; }
+  .hero p { color: #e0e8f1; margin: .55rem 0 0; max-width: 62ch; font-size: 1.04rem; }
+  .hero-meta { margin-top: 1rem; font-weight: 700; color: #ffb2b5; }
   .result {
-    padding: 1.2rem 1.35rem; border-radius: 16px; min-height: 145px;
-    background: white; border: 1px solid #e3dced;
+    padding: 1.2rem 1.35rem; border-radius: 14px; min-height: 145px;
+    background: #f5f7fa; border: 1px solid #dce3eb;
   }
-  .result .model { color: #564b6e; font-weight: 700; margin-bottom: .65rem; }
+  .result .model { color: #455165; font-weight: 700; margin-bottom: .65rem; }
   .result .label { font-size: 2rem; font-weight: 800; letter-spacing: -.025em; }
-  .result.benign .label { color: #18745d; }
-  .result.ddos .label { color: #b84457; }
-  .result .detail { color: #655c73; margin-top: .55rem; font-size: .91rem; }
-  .small-note { color: #5c5469; font-size: .92rem; }
+  .result.benign .label { color: #126851; }
+  .result.ddos .label { color: #aa3046; }
+  .result .detail { color: #4d596b; margin-top: .55rem; font-size: .91rem; }
+  .small-note { color: #465366; font-size: .92rem; }
 </style>
 """
 
@@ -137,6 +126,25 @@ def feature_group(name: str) -> str:
     return "Connection and volume"
 
 
+def load_example(kind: str, features: list[str], bundle: dict) -> None:
+    try:
+        values = sample_values(kind, features)
+        frame = pd.DataFrame(
+            [{name: float(values[name]) for name in features}], columns=features
+        )
+        for name, value in values.items():
+            st.session_state[f"field_{name}"] = value
+        st.session_state["entry_mode"] = MANUAL_MODE
+        st.session_state["loaded_example"] = kind
+        st.session_state["result"] = {
+            "mode": MANUAL_MODE,
+            "data": predict(frame, bundle).iloc[0].to_dict(),
+        }
+        st.session_state.pop("example_error", None)
+    except (OSError, ValueError) as error:
+        st.session_state["example_error"] = str(error)
+
+
 def show_single_result(result: dict, bundle: dict) -> None:
     st.subheader("Model predictions")
     columns = st.columns(2, gap="medium")
@@ -178,12 +186,12 @@ def show_batch_result(result: pd.DataFrame, source: str) -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="FlowGuard · DDoS flow check", page_icon="🌼", layout="wide")
+    st.set_page_config(page_title="FlowGuard · DDoS flow check", page_icon="🛡️", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
     st.markdown(
         '<div class="hero"><h1>FlowGuard</h1>'
-        '<p>Explore one network flow or upload a CSV, then compare two saved models side by side.</p>'
-        '<div class="hero-meta">20 measurements · 2 models · one clear result</div></div>',
+        '<p>Classify network-flow data with the study’s Random Forest and Logistic Regression models.</p>'
+        '<div class="hero-meta">20 flow measurements · CSV or manual entry</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -194,34 +202,30 @@ def main() -> None:
         st.stop()
     features = bundle["features"]
 
-    st.subheader("Try an example")
-    st.caption("Each button fills the 20 manual fields and immediately compares both models.")
+    mode = st.radio(
+        "How will you enter the flow?",
+        [CSV_MODE, MANUAL_MODE],
+        horizontal=True,
+        key="entry_mode",
+    )
+    st.caption("Try a sample flow. Its values will appear in the manual fields below.")
     benign_button, ddos_button, _ = st.columns([1, 1, 2])
-    chosen = None
-    if benign_button.button("Load BENIGN example", use_container_width=True):
-        chosen = "BENIGN"
-    if ddos_button.button("Load DDoS example", use_container_width=True):
-        chosen = "DDoS"
-    if chosen:
-        try:
-            values = sample_values(chosen, features)
-            for name, value in values.items():
-                st.session_state[f"field_{name}"] = value
-            st.session_state["entry_mode"] = "Manual inputs"
-            st.session_state["loaded_example"] = chosen
-            st.session_state["result"] = {
-                "mode": "Manual inputs",
-                "data": predict(pd.DataFrame([{name: float(values[name]) for name in features}], columns=features), bundle).iloc[0].to_dict(),
-            }
-        except (OSError, ValueError) as error:
-            st.error(str(error))
+    benign_button.button(
+        "Load BENIGN sample", on_click=load_example,
+        args=("BENIGN", features, bundle), use_container_width=True,
+    )
+    ddos_button.button(
+        "Load DDoS sample", on_click=load_example,
+        args=("DDoS", features, bundle), use_container_width=True,
+    )
+    if st.session_state.get("example_error"):
+        st.error(st.session_state["example_error"])
 
-    mode = st.radio("Choose input method", ["Manual inputs", "CSV upload"], horizontal=True, key="entry_mode")
     left, right = st.columns([1.35, 1], gap="large")
     with left:
-        if mode == "Manual inputs":
-            st.subheader("Flow measurements")
-            st.caption("All 20 fields use CICIDS2017 flow column names. Every field needs a numeric value.")
+        st.subheader("Flow details")
+        st.caption("Use CICIDS2017 column names. Destination Port and identifiers are excluded from this model.")
+        if mode == MANUAL_MODE:
             if st.session_state.get("loaded_example"):
                 st.success(f"{st.session_state['loaded_example']} example loaded into the text boxes below.")
             groups = {name: [] for name in ("Connection and volume", "Packet sizes", "Timing", "Headers and rate")}
@@ -231,24 +235,28 @@ def main() -> None:
                 for title, names in groups.items():
                     if not names:
                         continue
-                    st.markdown(f"#### {title}")
-                    columns = st.columns(2)
-                    for index, name in enumerate(names):
-                        columns[index % 2].text_input(name, key=f"field_{name}", placeholder="Enter a number")
+                    with st.expander(
+                        f"{title} · {len(names)} fields",
+                        expanded=bool(st.session_state.get("loaded_example")),
+                    ):
+                        columns = st.columns(2)
+                        for index, name in enumerate(names):
+                            columns[index % 2].text_input(
+                                name, key=f"field_{name}", placeholder="Enter a number"
+                            )
                 submitted = st.form_submit_button("Analyze this flow", type="primary")
             if submitted:
                 try:
                     st.session_state["result"] = {
-                        "mode": "Manual inputs",
+                        "mode": MANUAL_MODE,
                         "data": predict(manual_frame(features), bundle).iloc[0].to_dict(),
                     }
                     st.session_state.pop("loaded_example", None)
                 except ValueError as error:
                     st.error(str(error))
         else:
-            st.subheader("Upload flow data")
             st.caption("The CSV needs the 20 named model columns. Extra columns are ignored; all rows are classified.")
-            uploaded = st.file_uploader("Choose a CSV file", type="csv", on_change=lambda: st.session_state.pop("result", None))
+            uploaded = st.file_uploader("Choose a network-flow CSV", type="csv", on_change=lambda: st.session_state.pop("result", None))
             if st.button("Analyze CSV", type="primary"):
                 if uploaded is None:
                     st.error("Choose a CSV file first.")
@@ -256,7 +264,7 @@ def main() -> None:
                     try:
                         frame = uploaded_frame(uploaded, features)
                         st.session_state["result"] = {
-                            "mode": "CSV upload",
+                            "mode": CSV_MODE,
                             "data": predict(frame, bundle),
                             "source": uploaded.name,
                         }
@@ -265,7 +273,7 @@ def main() -> None:
     with right:
         result = st.session_state.get("result")
         if result and result["mode"] == mode:
-            if mode == "Manual inputs":
+            if mode == MANUAL_MODE:
                 show_single_result(result["data"], bundle)
             else:
                 show_batch_result(result["data"], result["source"])
