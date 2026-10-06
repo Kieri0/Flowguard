@@ -61,12 +61,13 @@ def load_bundle(modified_time: float) -> dict:
     return bundle
 
 
-def sample_values(kind: str, features: list[str]) -> dict[str, str]:
+def sample_values(kind: str, features: list[str], index: int) -> dict[str, str]:
     path = ROOT / "examples" / f"{kind}.csv"
     with path.open(newline="", encoding="utf-8-sig") as file:
-        row = next(csv.DictReader(file), None)
-    if row is None or any(name not in row for name in features):
+        rows = list(csv.DictReader(file))
+    if not rows or any(name not in rows[0] for name in features):
         raise ValueError(f"The {kind} example is missing required model fields.")
+    row = rows[index % len(rows)]
     return {name: row[name] for name in features}
 
 
@@ -126,20 +127,20 @@ def feature_group(name: str) -> str:
     return "Connection and volume"
 
 
-def load_example(kind: str, features: list[str], bundle: dict) -> None:
+def load_example(kind: str, features: list[str]) -> None:
     try:
-        values = sample_values(kind, features)
-        frame = pd.DataFrame(
-            [{name: float(values[name]) for name in features}], columns=features
-        )
+        index_key = f"sample_index_{kind}"
+        index = st.session_state.get(index_key, 0)
+        values = sample_values(kind, features, index)
+        for value in values.values():
+            if not math.isfinite(float(value)):
+                raise ValueError(f"The {kind} example contains a nonfinite value.")
         for name, value in values.items():
             st.session_state[f"field_{name}"] = value
+        st.session_state[index_key] = index + 1
         st.session_state["entry_mode"] = MANUAL_MODE
         st.session_state["loaded_example"] = kind
-        st.session_state["result"] = {
-            "mode": MANUAL_MODE,
-            "data": predict(frame, bundle).iloc[0].to_dict(),
-        }
+        st.session_state.pop("result", None)
         st.session_state.pop("example_error", None)
     except (OSError, ValueError) as error:
         st.session_state["example_error"] = str(error)
@@ -212,11 +213,11 @@ def main() -> None:
     benign_button, ddos_button, _ = st.columns([1, 1, 2])
     benign_button.button(
         "Load BENIGN sample", on_click=load_example,
-        args=("BENIGN", features, bundle), use_container_width=True,
+        args=("BENIGN", features), use_container_width=True,
     )
     ddos_button.button(
         "Load DDoS sample", on_click=load_example,
-        args=("DDoS", features, bundle), use_container_width=True,
+        args=("DDoS", features), use_container_width=True,
     )
     if st.session_state.get("example_error"):
         st.error(st.session_state["example_error"])
@@ -279,7 +280,7 @@ def main() -> None:
                 show_batch_result(result["data"], result["source"])
         else:
             st.subheader("Model predictions")
-            st.info("Load an example, enter 20 measurements, or upload a CSV to see the two predictions here.")
+            st.info("Load a sample or enter 20 measurements, then click Analyze this flow. For a CSV, click Analyze CSV.")
 
     st.divider()
     st.markdown(

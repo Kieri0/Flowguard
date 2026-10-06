@@ -1,2 +1,5 @@
 Source Port,Total Fwd Packets,Total Length of Fwd Packets,Fwd Packet Length Max,Fwd Packet Length Mean,Fwd Packet Length Std,Bwd Packet Length Max,Bwd Packet Length Mean,Bwd Packet Length Std,Fwd IAT Total,Fwd IAT Mean,Fwd IAT Std,Fwd IAT Max,Fwd Header Length,Bwd Header Length,Bwd Packets/s,Packet Length Std,Avg Bwd Segment Size,Init_Win_bytes_forward,act_data_pkt_fwd
 22095,4,24,6,6.0,0.0,0,0.0,0.0,6235836,2078612.0,3599386.943,6234826,80,0,0.0,0.0,0.0,256,3
+50097,3,26,20,8.666666667,10.26320288,8675,2321.4,3769.536019,604,302.0,404.4650788,588,72,112,132.0341176,2931.429562,2321.4,8192,2
+63722,5,30,6,6.0,0.0,0,0.0,0.0,2833942,708485.5,1415636.411,2831940,100,0,0.0,0.0,0.0,256,4
+62356,8,56,20,7.0,5.656854249,11595,2901.75,5795.50069,80100000,11400000.0,27700000.0,74000000,172,92,0.049211417,3214.167532,2901.75,256,6
