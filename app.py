@@ -1,4 +1,4 @@
-"""FlowGuard Streamlit demo for the study's saved 20-feature models."""
+"""FlowGuard Streamlit demo for the study's saved 10-feature models."""
 
 import csv
 import math
@@ -50,8 +50,8 @@ def load_bundle(modified_time: float) -> dict:
         bundle = pickle.load(file)
     features = bundle.get("features")
     models = bundle.get("models")
-    if bundle.get("artifact_version") != 1 or not isinstance(features, list) or len(features) != 20:
-        raise ValueError("model.pkl must contain the corrected 20-feature bundle.")
+    if bundle.get("artifact_version") != 1 or not isinstance(features, list) or len(features) != 10:
+        raise ValueError("model.pkl must contain the study's 10-feature bundle.")
     if not isinstance(models, dict) or set(models) != set(MODEL_NAMES):
         raise ValueError("model.pkl must contain both study models.")
     for model in models.values():
@@ -152,7 +152,7 @@ def show_single_result(result: dict, bundle: dict) -> None:
     for column, key in zip(columns, MODEL_NAMES):
         label = result[MODEL_NAMES[key]]
         accuracy = bundle.get("evaluation", {}).get(key, {}).get("accuracy")
-        detail = f"Study test accuracy: {accuracy:.2%}" if accuracy is not None else "Study model"
+        detail = f"Friday test accuracy: {accuracy:.4%}" if accuracy is not None else "Study model"
         with column:
             st.markdown(
                 f'<div class="result {label.lower()}">'
@@ -163,7 +163,10 @@ def show_single_result(result: dict, bundle: dict) -> None:
             )
     if result["Random Forest"] != result["Logistic Regression"]:
         st.warning("The models disagree on this flow. Review the measurements before drawing a conclusion.")
-    st.caption("One flow is classified as BENIGN or DDoS. This is a study demo, not live attack monitoring.")
+    st.caption(
+        "Random Forest was selected using validation DDoS F1. "
+        "These Friday test scores are exploratory and do not establish accuracy on other networks."
+    )
 
 
 def show_batch_result(result: pd.DataFrame, source: str) -> None:
@@ -192,7 +195,7 @@ def main() -> None:
     st.markdown(
         '<div class="hero"><h1>FlowGuard</h1>'
         '<p>Classify network-flow data with the study’s Random Forest and Logistic Regression models.</p>'
-        '<div class="hero-meta">20 flow measurements · CSV or manual entry</div></div>',
+        '<div class="hero-meta">10 flow measurements · CSV or manual entry</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -209,7 +212,7 @@ def main() -> None:
         horizontal=True,
         key="entry_mode",
     )
-    st.caption("Try a sample flow. Its values will appear in the manual fields below.")
+    st.caption("Load a labeled sample into the manual fields. Model predictions may differ from its recorded label.")
     benign_button, ddos_button, _ = st.columns([1, 1, 2])
     benign_button.button(
         "Load BENIGN sample", on_click=load_example,
@@ -225,10 +228,10 @@ def main() -> None:
     left, right = st.columns([1.35, 1], gap="large")
     with left:
         st.subheader("Flow details")
-        st.caption("Use CICIDS2017 column names. Destination Port and identifiers are excluded from this model.")
+        st.caption("Use CICIDS2017 column names. Ports, IPs, and time are excluded from this model.")
         if mode == MANUAL_MODE:
             if st.session_state.get("loaded_example"):
-                st.success(f"{st.session_state['loaded_example']} example loaded into the text boxes below.")
+                st.success(f"Recorded {st.session_state['loaded_example']} example loaded into the text boxes below.")
             groups = {name: [] for name in ("Connection and volume", "Packet sizes", "Timing", "Headers and rate")}
             for name in features:
                 groups[feature_group(name)].append(name)
@@ -256,7 +259,7 @@ def main() -> None:
                 except ValueError as error:
                     st.error(str(error))
         else:
-            st.caption("The CSV needs the 20 named model columns. Extra columns are ignored; all rows are classified.")
+            st.caption("The CSV needs the 10 named model columns. Extra columns are ignored; all rows are classified.")
             uploaded = st.file_uploader("Choose a network-flow CSV", type="csv", on_change=lambda: st.session_state.pop("result", None))
             if st.button("Analyze CSV", type="primary"):
                 if uploaded is None:
@@ -280,12 +283,13 @@ def main() -> None:
                 show_batch_result(result["data"], result["source"])
         else:
             st.subheader("Model predictions")
-            st.info("Load a sample or enter 20 measurements, then click Analyze this flow. For a CSV, click Analyze CSV.")
+            st.info("Load a sample or enter 10 measurements, then click Analyze this flow. For a CSV, click Analyze CSV.")
 
     st.divider()
     st.markdown(
-        '<p class="small-note">FlowGuard uses models trained on a single CICIDS2017 DDoS/BENIGN study capture. '
-        'Results may differ on other networks and should not be used as a standalone security decision.</p>',
+        '<p class="small-note">FlowGuard uses models trained on one CICIDS2017 Friday capture. '
+        'Friday test results were examined during feature-set experiments and should be treated as exploratory. '
+        'Performance on independent networks and attacks remains unverified.</p>',
         unsafe_allow_html=True,
     )
 
